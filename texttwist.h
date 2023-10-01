@@ -1,138 +1,168 @@
 #ifndef TEXTTWIST_H
 #define TEXTTWIST_H
 
-#define _GNU_SOURCE
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
-#include <ctype.h>
-#include <sys/types.h>
 
-int loadwords(const char *path,char ***words,size_t *nwords,size_t minlen,size_t maxlen);
-bool isanagram(const char *w1,const char *w2);
-void getanagrams(char ***anagrams,size_t *nanagrams,char **words,size_t nwords,char *word);
-char *shuffleword(char *word);
+#define STRUTIL_IMPLEMENTATION
+#include "strutil.h"
+
+size_t *TextTwist_Freq(char *w);
+
+bool TextTwist_IsZero(size_t *f);
+
+bool TextTwist_IsAnagram(char *w1,char *w2);
+
+void TextTwist_AddWord(char ***words,size_t *nwords,char *word);
+
+void TextTwist_GetAnagrams(char ***anagrams,size_t *nanagrams,char **dict,size_t ndict,char *word);
+
+void TextTwist_LoadDict(char ***dict,size_t *ndict,char *filename,size_t min,size_t max);
+
+char *TextTwist_ShuffleWord(char *w);
+
+void TextTwist_ShuffleAnagrams(char ***a,size_t na);
+
+void TextTwist_SortAnagrams(char ***a,size_t na);
+void TextTwist_FreeWords(char ***w,size_t *nw);
 
 
 
 #ifdef TEXTTWIST_IMPLEMENTATION
-
-static size_t *freq(const char *w);
-static bool iszero(size_t *f);
+	
 
 
-int loadwords(const char *path,char ***words,size_t *nwords,size_t minlen,size_t maxlen) {
-	FILE *fh;
-	char *line=NULL;
-	size_t llen=0;
-	ssize_t rlen=0;
-
-	if((fh=fopen(path,"rt"))==NULL) {
-		printf("Error: cannot open %s.\n",path);
-		return 1;
-	}
-
-	while((rlen=getline(&line,&llen,fh))!=-1) {
-		char *p=strchr(line,'\n');
-		if(p!=NULL) *p='\0';
-		size_t len=strlen(line);
-		if(len>=minlen && len<=maxlen) {
-			(*words)=realloc(*words,sizeof(**words)*((*nwords)+1));
-			(*words)[(*nwords)++]=strdup(line);
-		}
-		free(line);
-		line=NULL;
-		llen=0;
-	}
-
-	fclose(fh);
-
-	return 0;
-}
-
-static size_t *freq(const char *w) {
-	size_t i;
+size_t *TextTwist_Freq(char *w) {
 	size_t *f=calloc(26,sizeof(*f));
-
-	i=0;
-	while(w[i]) {
-		int c=toupper(w[i]);
-		if(c>='A' && c<='Z') {
-			f[c-'A']++;
+	for(size_t i=0;w[i];i++) {
+		if(isalpha(w[i])) {
+			f[toupper(w[i])-'A']++;
 		}
-		i++;
 	}
-
 	return f;
 }
 
-
-static bool iszero(size_t *f) {
-	size_t i;
-	for(i=0;i<26;i++) {
+bool TextTwist_IsZero(size_t *f) {
+	for(size_t i=0;i<26;i++) {
 		if(f[i]!=0) return false;
 	}
 	return true;
 }
 
-bool isanagram(const char *w1,const char *w2) {
 
-	bool result=true;
+bool TextTwist_IsAnagram(char *w1,char *w2) {
+	bool res=true;
+	size_t *f1=TextTwist_Freq(w1);
+	size_t *f2=TextTwist_Freq(w2);
 
-	size_t i;
+	if(TextTwist_IsZero(f1) || TextTwist_IsZero(f2)) 
+		res=false; 
+	else
+		for(size_t i=0;i<26;i++) {
+	 		if(f1[i]<f2[i]) { res=false; break; }
+		}
 
-	size_t *f1=freq(w1);
-	size_t *f2=freq(w2);
+	free(f1);
+	f1=NULL;
+	
+	free(f2);
+	f2=NULL;
+		
+	return res;
+}
 
-	if(iszero(f1) || iszero(f2)) {
-		result=false;
-	} else {
-		for(i=0;i<26;i++) {
-			if(f1[i]<f2[i]) {
-				result=false;
-				break;
+void TextTwist_AddWord(char ***words,size_t *nwords,char *word) {
+	*words=realloc(*words,sizeof(**words)*(*nwords+1));
+	(*words)[(*nwords)++]=strdup(trim(word));
+}
+
+void TextTwist_GetAnagrams(char ***anagrams,size_t *nanagrams,char **dict,size_t ndict,char *word) {
+	for(size_t i=0;i<ndict;i++) {
+		if(TextTwist_IsAnagram(word,dict[i])) {
+			TextTwist_AddWord(anagrams,nanagrams,dict[i]);
+			if(*nanagrams>30) break;
+		}
+	}
+}
+
+void TextTwist_LoadDict(char ***dict,size_t *ndict,char *filename,size_t min,size_t max) {
+	char *line=NULL;
+	size_t llen=0;
+	ssize_t rlen=0;
+
+	FILE *fin=fopen(filename,"r");
+	while((rlen=getline(&line,&llen,fin))!=-1) {
+		char *p=strchr(line,'\n'); if(p) *p='\0';
+		size_t len=strlen(trim(line));
+		if(len>=min && len<=max) TextTwist_AddWord(dict,ndict,line);
+		free(line);
+		line=NULL;
+		llen=0;
+		rlen=0;
+	}
+	free(line);
+	line=NULL;
+	llen=0;
+	rlen=0;
+	fclose(fin);	
+}
+
+void TextTwist_PrintWords(char **w,size_t nw) {
+	for(size_t i=0;i<nw;i++) {
+		if(i!=0) printf(", ");
+		printf("%s",w[i]);
+	}
+	printf("\n");
+}
+
+char *TextTwist_ShuffleWord(char *w) {
+	for(size_t i=strlen(w)-1;i>0;i--) {
+		size_t j=rand()%(i+1);
+		char t=w[i];
+		w[i]=w[j];
+		w[j]=t;
+	}
+	return w;
+}
+
+void TextTwist_ShuffleAnagrams(char ***a,size_t na) {
+	for(size_t i=na-1;i>0;i--) {
+		size_t j=rand()%(i+1);
+		char *t=(*a)[i];
+		(*a)[i]=(*a)[j];
+		(*a)[j]=t;
+	}
+}
+
+void TextTwist_SortAnagrams(char ***a,size_t na) {
+	for(size_t j=0;j<na-1;j++) {
+		for(size_t i=j+1;i<na;i++) {
+			if(strlen((*a)[i])>strlen((*a)[j])) {
+				char *t=(*a)[i];
+				(*a)[i]=(*a)[j];
+				(*a)[j]=t;
 			}
 		}
 	}
-
-	free(f2);
-	free(f1);
-
-	return result;
-
 }
 
-
-void getanagrams(char ***anagrams,size_t *nanagrams,char **words,size_t nwords,char *word) {
-	size_t i;
-	for(i=0;i<nwords;i++) {
-		if(isanagram(word,words[i])) {
-			(*anagrams)=realloc(*anagrams,sizeof(**anagrams)*((*nanagrams)+1));
-			(*anagrams)[(*nanagrams)++]=strdup(words[i]);
-			if((*nanagrams)>30) return;
-		}
+void TextTwist_FreeWords(char ***w,size_t *nw) {	for(size_t i=0;i<*nw;i++) {
+		free((*w)[i]);
+		(*w)[i]=NULL;
 	}
+	free(*w);
+	*w=NULL;
+	*nw=0;
 }
 
 
 
-char *shuffleword(char *word) {
-	size_t i,j;
-	char k;
-
-	for(i=strlen(word)-1;i>0;i--) {
-		j=(size_t)(rand()%(i+1));
-		k=word[i];
-		word[i]=word[j];
-		word[j]=k;
-	}
-
-	return word;
-}
+#endif /* TEXTTWIST_IMPLEMENTATION */
 
 
-#endif /* TEXTTWIST_IMPLEMENTATION  */
 
 #endif /* TEXTTWIST_H */
+
+

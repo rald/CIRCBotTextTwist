@@ -1,7 +1,5 @@
-texttwist: texttwist.c texttwist.h dyad.c dyad.h
-	gcc texttwist.c dyad.c -o texttwist -std=c89 -Wall -Wextra -g -std=c11
-
-.PHONY: clean
+tt: main.c common.h ini.h irc.h strutil.h texttwist.h
+	gcc main.c -o tt -lm -g -Wall -Wextra -pedantic
 
 clean:
-	rm texttwist
+	rm tt
